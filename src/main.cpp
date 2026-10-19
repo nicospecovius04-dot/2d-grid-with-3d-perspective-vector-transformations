@@ -1,5 +1,6 @@
 #include <algorithm>
 #include <cstddef>
+#include <exception>
 #include <stdexcept>
 #include <vector>
 
@@ -35,7 +36,7 @@ private:
   Tiles tiles_;
 };
 
-using Field = std::vector<Collum>;
+using Collums = std::vector<Collum>;
 
 class Grid {
 public:
@@ -43,11 +44,11 @@ public:
       : Grid(seite, seite) { }
 
   Grid(const size_t collums, const size_t rows)
-      : field_(Field(collums, Collum(rows))) {
+      : collums_(Collums(collums, Collum(rows))) {
 
     for (auto i { 0uz }; i < collums; i++) {
       for (auto j { 0uz }; j < rows; j++) {
-        auto& positionDurchlauf = field_.at(i)[j];
+        auto& positionDurchlauf = collums_.at(i)[j];
         positionDurchlauf = Tile { static_cast<int>(i), static_cast<int>(j) };
       }
     }
@@ -59,23 +60,23 @@ public:
   }
 
   Collum& operator[](const size_t collum) {
-    if (collum >= field_.size()) {
-      throw std::logic_error("Außerhalb des Indexes");
+    if (collum >= collums_.size()) {
+      throw std::logic_error("Außerhalb des Index");
     }
-    return field_.at(collum);
+    return collums_.at(collum);
   }
 
-  [[nodiscard]] float GetMapSize() const { return static_cast<float>(field_.size()); }
+  [[nodiscard]] float GetCollumsSize() const { return static_cast<float>(collums_.size()); }
 
 private:
   const float rautenWidth_ { 64 };
   const float rautenHeight_ { 32 };
 
   Vector2 offset_ { 0, 0 }; // für raylib, die Kamera übernimmt das Verschieben
-  Vector2 i_ { rautenWidth_ / 2, rautenHeight_ / 2 }; // ein Schritt in x: rechts unten
-  Vector2 j_ { -rautenWidth_ / 2, rautenHeight_ / 2 }; // ein Schritt in y: links unten
+  Vector2 i_ { rautenWidth_ / 2, rautenHeight_ / 2  }; // ein Schritt in x: rechts unten
+  Vector2 j_ { -rautenWidth_ /2 , rautenHeight_ /2 }; // ein Schritt in y: links unten
 
-  Field field_;
+  Collums collums_;
 };
 
 class Player {
@@ -111,8 +112,8 @@ public:
     direction = Vector2Normalize(direction);
     coordinates_ = Vector2Add(coordinates_, Vector2Scale(direction, speed_ * dt)); // fps Sicherheit
 
-    coordinates_.x = std::clamp(coordinates_.x, 0.0f, grid_.GetMapSize());
-    coordinates_.y = std::clamp(coordinates_.y, 0.0f, grid_.GetMapSize());
+    coordinates_.x = std::clamp(coordinates_.x, 0.0f, grid_.GetCollumsSize());
+    coordinates_.y = std::clamp(coordinates_.y, 0.0f, grid_.GetCollumsSize());
   }
 
   [[nodiscard]] Vector2 GetCoordinates() const { return coordinates_; }
@@ -135,9 +136,14 @@ public:
 
   void Draw() {
 
-    InitWindow(1000, 1000, "Isometric");
+    InitWindow(1000, 1000, "Game");
     SetTargetFPS(60);
 
+    sand_ = LoadTexture("assets/kenney_pirate-kit/terrain_sand_a.png");
+if (sand_.id == 0) {
+  TraceLog(LOG_ERROR, "Nicht geladen. Arbeitsverzeichnis: %s", GetWorkingDirectory());
+  TraceLog(LOG_ERROR, "Datei existiert: %d", FileExists("assets/tiles.png"));
+}
     camera_.offset = { GetScreenWidth() / 2.0f, GetScreenHeight() / 2.0f };
 
     while (!WindowShouldClose()) {
@@ -154,12 +160,13 @@ public:
 
       EndDrawing();
     }
+    UnloadTexture(sand_);
     CloseWindow();
   }
 
 private:
   void DrawTiles() {
-    for (auto collum { 0uz }; collum < static_cast<size_t>(grid_.GetMapSize()); collum++) {
+    for (auto collum { 0uz }; collum < static_cast<size_t>(grid_.GetCollumsSize()); collum++) {
       for (auto rows { 0uz }; rows < static_cast<size_t>(grid_[collum].GetHeight()); rows++) {
         const auto& tile = grid_[collum][rows];
         const float x { static_cast<float>(tile.x) };
@@ -170,14 +177,35 @@ private:
         const Vector2 bottom { grid_.TransformationPoint(x + 1, y + 1) };
         const Vector2 left { grid_.TransformationPoint(x, y + 1) };
 
+        /*float wallheight {};
+        if(1) {
+        wallheight += 10;
+        
+        const Vector2 bottomRight { right.x, right.y + wallheight};
+        const Vector2 bottomMid {bottom.x, bottom.y + wallheight};
+        const Vector2 bottomLeft { left.x, left.y + wallheight};
+*/
         Color color { GREEN };
-
-        if ((tile.x + tile.y) % 2 != 0) {
-          color = GRAY;
+        if((collum + rows) % 2) {
+          color = DARKGREEN;
         }
 
         DrawTriangle(top, left, right, color);
         DrawTriangle(left, bottom, right, color);
+
+      /* DrawTriangle(left, bottom, bottomLeft, DARKGREEN);
+        DrawTriangle(bottomLeft, bottom, bottomMid, DARKGREEN);
+
+        DrawTriangle(right, bottom, bottomRight, GRAY);
+        DrawTriangle(bottom, bottomMid, bottomRight, GRAY);*/
+
+
+        const float texWidht = static_cast<float>(sand_.width);
+        const float texHeight = static_cast<float>(sand_.height);
+
+        if (tile.x == 0  || tile.x == grid_.GetCollumsSize() - 1 || tile.y == 0 || tile.y == grid_[collum].GetHeight() - 1) {
+         
+        }
       }
     }
   }
@@ -208,10 +236,12 @@ private:
   Grid& grid_; // has-a
   Player& player_;
   Camera2D camera_ { { 0.0f, 0.0f }, { 0.0f, 0.0f }, 0.0f, 2.0f }; // offset, target, rotation, zoom
+
+  Texture2D sand_ { };
 };
 
 int main() {
-  Grid grid { 100 };
+  Grid grid { 20 };
   Player player { grid };
   RayLibImplementation raylib { grid, player };
 
